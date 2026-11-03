@@ -1,0 +1,76 @@
+// Needs playwright-core and a Chrome: PLAYWRIGHT_CORE=<path to playwright-core/index.mjs> CHROME=<path> npm run check:browser (with npm start running).
+const { chromium } = await import(process.env.PLAYWRIGHT_CORE ?? "playwright-core");
+const base = process.env.BASE_URL ?? "http://127.0.0.1:4174/";
+const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
+const results = [];
+const ok = (name, cond) => results.push(`${cond ? "✓" : "✗"} ${name}`);
+const issues = [];
+async function fresh(opts = {}) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...opts });
+  const page = await ctx.newPage();
+  page.on("console", (m) => { if (["error", "warning"].includes(m.type())) issues.push(m.text()); });
+  page.on("pageerror", (e) => issues.push(e.message));
+  page.on("request", (r) => { const u = r.url(); if (!u.startsWith(new URL(base).origin) && !u.startsWith("data:")) issues.push("EXTERN " + u); });
+  await page.goto(base, { waitUntil: "networkidle" });
+  return { ctx, page };
+}
+{ const { ctx, page } = await fresh();
+  ok("poort open bij eerste bezoek", await page.locator("[data-gate]").evaluate((d) => d.open));
+  ok("focus op 'Ja' in de poort", await page.evaluate(() => document.activeElement?.matches("[data-gate-yes]")));
+  await page.keyboard.press("Escape");
+  ok("Escape sluit de poort niet", await page.locator("[data-gate]").evaluate((d) => d.open));
+  await page.click("[data-gate-no]");
+  ok("'Nee' houdt de poort dicht en verbergt de knoppen", await page.locator("[data-gate]").evaluate((d) => d.open) && !(await page.locator("[data-gate-yes]").count()));
+  await page.reload({ waitUntil: "networkidle" });
+  ok("na 'Nee' en herladen staat de poort er weer", await page.locator("[data-gate]").evaluate((d) => d.open));
+  await page.keyboard.press("Enter");
+  ok("Enter op 'Ja' opent de site", !(await page.locator("[data-gate]").evaluate((d) => d.open)));
+  await page.reload({ waitUntil: "networkidle" });
+  ok("binnen dezelfde sessie geen tweede poort", !(await page.locator("[data-gate]").evaluate((d) => d.open)));
+  await page.fill("[data-search]", "gin");
+  await page.waitForTimeout(250);
+  ok("zoeken op 'gin' geeft 2 flessen", (await page.locator("[data-grid] > li").count()) === 2);
+  await page.fill("[data-search]", "");
+  await page.click("[data-category=whisky]");
+  await page.waitForTimeout(150);
+  ok("filter whisky geeft 3 flessen", (await page.locator("[data-grid] > li").count()) === 3 && (await page.getAttribute("[data-category=whisky]", "aria-pressed")) === "true");
+  await page.fill("[data-search]", "xyz");
+  await page.waitForTimeout(250);
+  ok("lege staat zichtbaar zonder resultaat", await page.locator("[data-empty]").isVisible());
+  await page.click("[data-reset]");
+  ok("toon alles zet alles terug", (await page.locator("[data-grid] > li").count()) === 11);
+  await page.selectOption("[data-sort]", "prijs-af");
+  ok("duurste fles eerst", (await page.locator(".card__name").first().textContent()).includes("Johnnie Walker"));
+  await page.click(".add >> nth=0"); await page.click(".add >> nth=0");
+  ok("mandteller telt mee", (await page.textContent("[data-cart-count]")) === "2");
+  await page.reload({ waitUntil: "networkidle" });
+  ok("mand blijft bewaard na herladen", (await page.textContent("[data-cart-count]")) === "2");
+  await page.click("[data-open-cart]");
+  await page.click("[data-checkout]");
+  await page.check("input[value=bezorgen]");
+  await page.fill("#f-naam", "Sanne"); await page.fill("#f-tel", "06 12345678"); await page.fill("#f-straat", "Molenweg 1"); await page.fill("#f-postcode", "3011 AB"); await page.check("input[name=leeftijd]");
+  await page.click("[data-checkout-form] button[type=submit]");
+  ok("postcode buiten Rozenburg geweigerd, focus op het veld", (await page.textContent("[data-error-for=postcode]")).includes("3181") && await page.evaluate(() => document.activeElement?.id === "f-postcode"));
+  await page.fill("#f-postcode", "3181 CG");
+  await page.click("[data-checkout-form] button[type=submit]");
+  ok("proefbestelling toont de bevestiging", await page.locator("[data-done]").isVisible());
+  ok("mand is leeg en er staat geen formulierdata in storage", (await page.textContent("[data-cart-count]")) === "0" && await page.evaluate(() => !JSON.stringify({ ...localStorage, ...sessionStorage }).includes("Sanne")));
+  await page.keyboard.press("Escape");
+  ok("Escape sluit het venster", !(await page.locator("[data-checkout-dialog]").evaluate((d) => d.open)));
+  await page.click("[data-open-credits]");
+  ok("beeldcredits tonen 11 foto's", (await page.locator("[data-credit-list] li").count()) === 11);
+  await ctx.close(); }
+{ const { ctx, page } = await fresh({ reducedMotion: "reduce" });
+  await page.click("[data-gate-yes]");
+  const op = await page.evaluate(() => [...document.querySelectorAll(".shelf__bottle, .section-head")].map((e) => getComputedStyle(e).opacity));
+  ok("reduced motion: alles direct zichtbaar", op.every((o) => o === "1"));
+  ok("reduced motion: geen reveal-klassen", (await page.locator(".reveal").count()) === 0);
+  await ctx.close(); }
+{ const ctx = await browser.newContext({ javaScriptEnabled: false }); const page = await ctx.newPage();
+  await page.goto(base);
+  ok("zonder JavaScript: inhoud zichtbaar en noscript-melding", await page.locator("#winkel h2").isVisible() && await page.locator(".noscript").isVisible());
+  await ctx.close(); }
+console.log(results.join("\n"));
+console.log("console/CSP/extern:", issues.length ? issues.join(" | ") : "geen");
+await browser.close();
+if (issues.length || results.some((r) => r.startsWith("✗"))) process.exit(1);

@@ -1,0 +1,16 @@
+{
+  "name": "de-gouden-kurk-site",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Websiteconcept voor De Gouden Kurk, slijterij aan het Raadhuisplein in Rozenburg.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node tools/check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check:browser": "node tools/browser-check.mjs"
+  }
+}
