@@ -41,7 +41,7 @@ const CROSS = "m6 6 12 12M18 6 6 18";
 
 function bottleImage(product, { loading = "lazy", className = "bottle" } = {}) {
   return el("img", {
-    class: className, src: product.image, alt: product.imageAlt,
+    class: className, src: (document.documentElement.dataset.base ?? "") + product.image, alt: product.imageAlt,
     width: product.imageWidth, height: product.imageHeight, loading, decoding: "async"
   });
 }

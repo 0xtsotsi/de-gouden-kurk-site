@@ -84,3 +84,11 @@ terugkomt.
 Elke statische host werkt (GitHub Pages, Cloudflare Pages): de map zoals hij
 is. Alle paden zijn relatief. Er is nog niets gepubliceerd; waar de preview
 komt te staan is een open vraag in de brief.
+
+## Impressie 2 (`v2/`)
+
+Een tweede ontwerprichting op dezelfde inhoud en functies: zwart en goud,
+Didone-kapitalen (Bodoni Moda, OFL, lokaal), een donkere spotlight voor
+"Uit de kast" en de winkelfoto als volle band. `v2/index.html` gebruikt
+dezelfde JS en `site.css`, met `v2/v2.css` eroverheen; `data-base="../"` op
+`<html>` laat productfoto's vanuit de submap laden. Live op `/v2/`.
